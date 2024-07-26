@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres
+    container_name: postgres_container
+    restart: always
+    volumes:
+      - ./db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    env_file:
+      - docker.env
+      - db.env
+    # environment:    #Replace with .env file in production/deployment
+    #   - POSTGRES_DB = ${DB_NAME:-user_db}
+    #   - POSTGRES_USER = ${DB_USER:-demo_user}
+    #   - POSTGRES_PASSWORD = ${DB_PASSWORD:-demo_password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+  server:
+    build:
+      context: .
+    image: fast_auth    #docker compose built image name
+    container_name: fast_auth_container
+    restart: always
+    command: bash -c "alembic stamp head && alembic upgrade head && uvicorn app.app:app --host 0.0.0.0 --port ${PORT:-6969} --log-level info"   # Use --reload for auto reloading after code change during development
+    volumes:
+      - .:/server_app   #Only for development :: Remove this volume while deploying and instead COPY all with Dockerfile and docker build
+      - /server_app/.venv/    #Don't include .venv in the container; only for local intellisense purposes
+      - /server_app/.linuxvenv/    #Don't include .venv in the container; only for local intellisense purposes
+      - /dev/null:/server_app/.env  #Don't sync the local .env file to volume
+    ports:
+      - "${PORT:-6969}:${PORT:-6969}"
+    env_file:
+      - docker.env
+      - server.env
+    # environment:    #Replace with .env file in production/deployment
+    #   - DB_NAME = ${DB_NAME:-user_db}
+    #   - DB_USER = ${DB_USER:-demo_user}
+    #   - DB_PASSWORD = ${DB_PASSWORD:-demo_password}
+    #   - FROM_DOCKER = ${FROM_DOCKER:-True}    #Keep it False in local .env file
+    #   - JWT_SECRET_KEY = ${JWT_SECRET_KEY:-somekey}
+    #   - SUPERUSER_PASSWORD = ${SUPERUSER_PASSWORD:-demo_adminpassword}
+    depends_on:
+      db:
+        condition: service_healthy
+
+
+### ***evironment context overrides the env_file context***
+
+
+### Sample docker compose up command from bash for setting env variables in the terminal:
+### FROM_DOCKER=True DB_NAME=user_db DB_USER=demo_user DB_PASSWORD=demo_password JWT_SECRET_KEY=somekey SUPERUSER_PASSWORD=demo_adminpassword docker compose up
+
+### If you want to create more than one db, just changing the POSTGRES_DB env variable won't work in case of using a persistent volume,
+### insted do it manually by writing query CREATE DATABASE new_db;
+### If you need to change DB username or password, you have to use another folder as volume and create an entirely new db server essentially or 
+### delete the existing volume in docker with docker compose down --volumes and delete the corresponding directory mapped in your host machine
+
+### Healthcheck added so that the web server is started only after the postgres container is deemed healthy to avoid startup errors

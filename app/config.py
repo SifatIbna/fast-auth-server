@@ -1,0 +1,3 @@
+BASE_PATH = "/auth/v1"
+ACCESS_TOKEN_EXPIRE_MINUTES = 10  # 10 minutes
+SESSION_EXPIRE_MINUTES = 7 * 24 * 60  # 7 days
